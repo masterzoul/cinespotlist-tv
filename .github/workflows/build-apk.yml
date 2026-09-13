@@ -33,5 +33,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CineSpotList-TV-Native-APK
-          path: CineSpotList-TV-Landscape.apk
+          path: CineSpotList-TV-Native.apk
           retention-days: 30
