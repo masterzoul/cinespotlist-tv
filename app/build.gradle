@@ -7,11 +7,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.masterzoul.cinespotlisttv.landscape'
+        applicationId 'com.masterzoul.cinespotlisttv.nativeapp'
         minSdk 23
         targetSdk 35
-        versionCode 3
-        versionName '2.1.0'
+        versionCode 10
+        versionName '3.0.0'
     }
 
     buildTypes {
