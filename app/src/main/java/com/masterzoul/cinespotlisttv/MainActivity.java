@@ -14,17 +14,18 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.TextView;
@@ -38,7 +39,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -58,14 +58,15 @@ import java.util.concurrent.Future;
 
 public class MainActivity extends Activity {
     private static final String API = "https://cinespotlist3.pages.dev/api";
+
     private static final int BG = Color.rgb(23, 22, 37);
     private static final int CARD = Color.rgb(33, 31, 49);
-    private static final int BORDER = Color.rgb(67, 62, 89);
+    private static final int BORDER = Color.rgb(69, 64, 91);
     private static final int WHITE = Color.rgb(247, 246, 250);
     private static final int MUTED = Color.rgb(185, 181, 201);
     private static final int ORANGE = Color.rgb(233, 154, 81);
     private static final int YELLOW = Color.rgb(224, 193, 79);
-    private static final int NETFLIX = Color.rgb(229, 76, 76);
+    private static final int NETFLIX = Color.rgb(229, 9, 20);
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService pool = Executors.newFixedThreadPool(10);
@@ -77,11 +78,15 @@ public class MainActivity extends Activity {
     private final Map<Integer, String> genres = new HashMap<>();
 
     private LinearLayout content;
+    private TextView sectionTitle;
     private TextView status;
+    private LinearLayout searchPanel;
     private EditText searchInput;
-    private LinearLayout searchRow;
-    private Button sortBtn;
-    private Button modeBtnLatest, modeBtnMovies, modeBtnSeries, modeBtnNetflix, modeBtnUpcoming;
+    private ImageButton searchIcon;
+    private ImageButton catalogIcon;
+    private Button netflixIcon;
+    private ImageButton sortIcon;
+    private ImageButton refreshFab;
 
     private String mode = "latest";
     private boolean sortRating = false;
@@ -93,33 +98,15 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         try {
             requestWindowFeature(Window.FEATURE_NO_TITLE);
-            enterImmersiveMode();
             initGenres();
             buildUi();
-            status.setText("CineSpotList TV v4.0.0 • Starting…");
-            ui.postDelayed(this::loadCatalog, 350);
+            enterImmersiveMode();
+            status.setText("Loading latest titles…");
+            status.setVisibility(View.VISIBLE);
+            ui.postDelayed(this::loadCatalog, 250);
         } catch (Throwable t) {
             showFatalStartupError(t);
         }
-    }
-
-    private void showFatalStartupError(Throwable t) {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(dp(50), dp(40), dp(50), dp(40));
-        root.setBackgroundColor(BG);
-
-        TextView title = text("CineSpotList TV", 34, WHITE, true);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, new LinearLayout.LayoutParams(-1, -2));
-
-        TextView msg = text("App startup error\n\n" + t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()), 22, MUTED, false);
-        msg.setGravity(Gravity.CENTER);
-        msg.setPadding(0, dp(24), 0, 0);
-        root.addView(msg, new LinearLayout.LayoutParams(-1, -2));
-
-        setContentView(root);
     }
 
     private int dp(int v) {
@@ -127,148 +114,299 @@ public class MainActivity extends Activity {
     }
 
     private void enterImmersiveMode() {
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        );
+        try {
+            getWindow().setFlags(
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN
+            );
+            getWindow().setStatusBarColor(BG);
+            getWindow().setNavigationBarColor(BG);
+
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                    View.SYSTEM_UI_FLAG_LOW_PROFILE
+            );
+
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                WindowInsetsController c = getWindow().getInsetsController();
+                if (c != null) {
+                    c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                    c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) ui.postDelayed(this::enterImmersiveMode, 120);
     }
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(BG);
-        root.setPadding(dp(42), dp(24), dp(42), dp(24));
         setContentView(root);
+
+        LinearLayout main = new LinearLayout(this);
+        main.setOrientation(LinearLayout.VERTICAL);
+        main.setBackgroundColor(BG);
+        root.addView(main, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(14), dp(8), dp(14), dp(6));
+        header.setBackgroundColor(BG);
+        main.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.20f
+        ));
 
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
+        header.addView(titleRow, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.50f
+        ));
 
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-        titleRow.addView(titles, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout titleBox = new LinearLayout(this);
+        titleBox.setOrientation(LinearLayout.VERTICAL);
+        titleBox.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(titleBox, new LinearLayout.LayoutParams(0, -1, 1f));
 
-        TextView title = text("CineSpotList TV", 36, WHITE, true);
-        titles.addView(title);
-        TextView sub = text("Latest Movies & Series • Sony TV v4.0.0 • 5 cards", 18, MUTED, false);
-        sub.setPadding(0, dp(5), 0, 0);
-        titles.addView(sub);
+        TextView title = text("Latest Movies & Series", 31, WHITE, true);
+        titleBox.addView(title);
 
-        Button refresh = button("Refresh", 18);
-        refresh.setOnClickListener(v -> loadCatalog());
-        titleRow.addView(refresh, lpWrap(dp(140), dp(58), dp(10)));
+        TextView meta = text("Made with love by Masterzoul | V1.6.5 (13.9.2026 | 11:28 AM)", 14, MUTED, false);
+        meta.setPadding(0, dp(3), 0, 0);
+        titleBox.addView(meta);
 
-        HorizontalScrollView hsv = new HorizontalScrollView(this);
-        hsv.setHorizontalScrollBarEnabled(false);
-        hsv.setFillViewport(true);
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        controls.setGravity(Gravity.CENTER_VERTICAL);
-        hsv.addView(controls, new HorizontalScrollView.LayoutParams(-2, -2));
-        LinearLayout.LayoutParams hsvLp = new LinearLayout.LayoutParams(-1, dp(72));
-        hsvLp.topMargin = dp(18);
-        root.addView(hsv, hsvLp);
+        LinearLayout controlRow = new LinearLayout(this);
+        controlRow.setOrientation(LinearLayout.HORIZONTAL);
+        controlRow.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(controlRow, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.50f
+        ));
 
-        Button searchToggle = button("Search", 18);
-        searchToggle.setOnClickListener(v -> {
-            searchRow.setVisibility(searchRow.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            if (searchRow.getVisibility() == View.VISIBLE) searchInput.requestFocus();
-        });
-        controls.addView(searchToggle, controlLp());
-
-        modeBtnLatest = addModeButton(controls, "Latest", "latest");
-        modeBtnMovies = addModeButton(controls, "Movies", "movies");
-        modeBtnSeries = addModeButton(controls, "Series", "series");
-        modeBtnNetflix = addModeButton(controls, "Netflix", "netflix");
-        modeBtnUpcoming = addModeButton(controls, "Upcoming", "upcoming");
-
-        sortBtn = button("Sort: Date", 18);
-        sortBtn.setOnClickListener(v -> {
-            sortRating = !sortRating;
-            sortBtn.setText(sortRating ? "Sort: IMDb" : "Sort: Date");
-            render();
-        });
-        controls.addView(sortBtn, controlLp());
-
-        searchRow = new LinearLayout(this);
-        searchRow.setOrientation(LinearLayout.HORIZONTAL);
-        searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        searchRow.setVisibility(View.GONE);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(-1, dp(70));
-        searchLp.topMargin = dp(8);
-        root.addView(searchRow, searchLp);
+        searchPanel = new LinearLayout(this);
+        searchPanel.setOrientation(LinearLayout.HORIZONTAL);
+        searchPanel.setGravity(Gravity.CENTER_VERTICAL);
+        searchPanel.setVisibility(View.GONE);
+        LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(0, -1, 1f);
+        splp.rightMargin = dp(10);
+        controlRow.addView(searchPanel, splp);
 
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
-        searchInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21);
+        searchInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         searchInput.setTextColor(WHITE);
         searchInput.setHintTextColor(MUTED);
         searchInput.setHint("Search movies or series…");
         searchInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        searchInput.setPadding(dp(18), 0, dp(18), 0);
-        searchInput.setBackground(roundRect(CARD, BORDER, 2, 12));
-        searchRow.addView(searchInput, new LinearLayout.LayoutParams(0, dp(56), 1f));
+        searchInput.setPadding(dp(12), 0, dp(12), 0);
+        searchInput.setBackground(roundRect(CARD, BORDER, 1, 10));
+        searchPanel.addView(searchInput, new LinearLayout.LayoutParams(0, dp(46), 1f));
 
-        Button go = button("Go", 18);
+        Button go = smallTextButton("Go", 16);
         go.setOnClickListener(v -> runSearch(searchInput.getText().toString()));
-        LinearLayout.LayoutParams glp = lpWrap(dp(100), dp(56), dp(10));
-        searchRow.addView(go, glp);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(dp(74), dp(46));
+        glp.leftMargin = dp(7);
+        searchPanel.addView(go, glp);
 
-        Button clear = button("Clear", 18);
+        Button clear = smallTextButton("×", 22);
         clear.setOnClickListener(v -> {
             searchInput.setText("");
+            searchPanel.setVisibility(View.GONE);
             mode = "latest";
             visibleCount = 10;
+            refreshControlStates();
             render();
         });
-        searchRow.addView(clear, lpWrap(dp(110), dp(56), dp(10)));
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(dp(52), dp(46));
+        clp.leftMargin = dp(7);
+        searchPanel.addView(clear, clp);
 
-        status = text("Loading…", 20, MUTED, false);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
-        slp.topMargin = dp(10);
-        slp.bottomMargin = dp(10);
-        root.addView(status, slp);
+        Space spacer = new Space(this);
+        controlRow.addView(spacer, new LinearLayout.LayoutParams(0, dp(1), 1f));
+
+        searchIcon = iconButton(com.masterzoul.cinespotlisttv.R.drawable.ic_search_tv, "Search");
+        searchIcon.setOnClickListener(v -> {
+            boolean show = searchPanel.getVisibility() != View.VISIBLE;
+            searchPanel.setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) searchInput.requestFocus();
+            refreshControlStates();
+        });
+        controlRow.addView(searchIcon, iconLp());
+
+        catalogIcon = iconButton(com.masterzoul.cinespotlisttv.R.drawable.ic_clapper_tv, "Browse");
+        catalogIcon.setOnClickListener(this::showCatalogMenu);
+        controlRow.addView(catalogIcon, iconLp());
+
+        netflixIcon = smallTextButton("N", 30);
+        netflixIcon.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        netflixIcon.setTextColor(NETFLIX);
+        netflixIcon.setContentDescription("Netflix");
+        netflixIcon.setOnClickListener(v -> {
+            mode = "netflix";
+            visibleCount = 10;
+            searchPanel.setVisibility(View.GONE);
+            refreshControlStates();
+            render();
+        });
+        controlRow.addView(netflixIcon, iconLp());
+
+        sortIcon = iconButton(com.masterzoul.cinespotlisttv.R.drawable.ic_sort_tv, "Sort");
+        sortIcon.setOnClickListener(v -> {
+            sortRating = !sortRating;
+            refreshControlStates();
+            render();
+            Toast.makeText(this, sortRating ? "Sort: IMDb" : "Sort: Date", Toast.LENGTH_SHORT).show();
+        });
+        controlRow.addView(sortIcon, iconLp());
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(10), 0, dp(10), 0);
+        main.addView(body, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.80f
+        ));
+
+        LinearLayout bodyHead = new LinearLayout(this);
+        bodyHead.setOrientation(LinearLayout.HORIZONTAL);
+        bodyHead.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams bhp = new LinearLayout.LayoutParams(-1, dp(42));
+        body.addView(bodyHead, bhp);
+
+        sectionTitle = text("Latest Movies & Series", 22, WHITE, true);
+        bodyHead.addView(sectionTitle, new LinearLayout.LayoutParams(0, -1, 1f));
+
+        status = text("", 15, MUTED, false);
+        status.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        status.setVisibility(View.GONE);
+        bodyHead.addView(status, new LinearLayout.LayoutParams(0, -1, 1f));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setVerticalScrollBarEnabled(false);
         scroll.setClipToPadding(false);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        body.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(0, dp(8), 0, dp(40));
+        content.setPadding(0, dp(2), 0, dp(70));
         scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
 
-        highlightModeButton();
+        refreshFab = iconButton(com.masterzoul.cinespotlisttv.R.drawable.ic_refresh_tv, "Refresh");
+        refreshFab.setOnClickListener(v -> loadCatalog());
+        FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(dp(56), dp(56), Gravity.END | Gravity.BOTTOM);
+        rlp.setMargins(0, 0, dp(18), dp(18));
+        root.addView(refreshFab, rlp);
+
+        refreshControlStates();
     }
 
-    private Button addModeButton(LinearLayout controls, String label, String value) {
-        Button b = button(label, 18);
-        b.setOnClickListener(v -> {
-            mode = value;
+    private void showCatalogMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        popup.getMenu().add("Latest");
+        popup.getMenu().add("Movies");
+        popup.getMenu().add("Series");
+        popup.getMenu().add("Upcoming");
+        popup.setOnMenuItemClickListener(item -> {
+            String t = item.getTitle().toString();
+            if ("Movies".equals(t)) mode = "movies";
+            else if ("Series".equals(t)) mode = "series";
+            else if ("Upcoming".equals(t)) mode = "upcoming";
+            else mode = "latest";
             visibleCount = 10;
-            highlightModeButton();
+            searchPanel.setVisibility(View.GONE);
+            refreshControlStates();
             render();
+            return true;
         });
-        controls.addView(b, controlLp());
+        popup.show();
+    }
+
+    private ImageButton iconButton(int drawable, String description) {
+        ImageButton b = new ImageButton(this);
+        b.setImageResource(drawable);
+        b.setScaleType(ImageView.ScaleType.CENTER);
+        b.setPadding(dp(12), dp(12), dp(12), dp(12));
+        b.setContentDescription(description);
+        b.setFocusable(true);
+        b.setFocusableInTouchMode(true);
+        applyFocusStyle(b, false);
         return b;
     }
 
-    private LinearLayout.LayoutParams controlLp() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(150), dp(56));
-        lp.setMargins(0, 0, dp(12), 0);
+    private Button smallTextButton(String label, float sp) {
+        Button b = new Button(this);
+        b.setAllCaps(false);
+        b.setText(label);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        b.setTextColor(WHITE);
+        b.setGravity(Gravity.CENTER);
+        b.setMinWidth(0);
+        b.setMinHeight(0);
+        b.setPadding(dp(6), 0, dp(6), 0);
+        b.setFocusable(true);
+        b.setFocusableInTouchMode(true);
+        applyFocusStyle(b, false);
+        return b;
+    }
+
+    private LinearLayout.LayoutParams iconLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(56), dp(50));
+        lp.leftMargin = dp(9);
         return lp;
     }
 
-    private LinearLayout.LayoutParams lpWrap(int w, int h, int left) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(w, h);
-        lp.leftMargin = left;
-        return lp;
+    private void applyFocusStyle(View v, boolean active) {
+        v.setBackground(roundRect(CARD, active ? ORANGE : BORDER, active ? 2 : 1, 11));
+        v.setOnFocusChangeListener((view, hasFocus) -> {
+            boolean on = hasFocus || controlIsActive(view);
+            view.setScaleX(1f);
+            view.setScaleY(1f);
+            view.setBackground(roundRect(CARD, on ? ORANGE : BORDER, on ? 2 : 1, 11));
+        });
+    }
+
+    private boolean controlIsActive(View v) {
+        if (v == searchIcon) return searchPanel != null && searchPanel.getVisibility() == View.VISIBLE;
+        if (v == netflixIcon) return "netflix".equals(mode);
+        if (v == sortIcon) return sortRating;
+        if (v == catalogIcon) return !"netflix".equals(mode) && !"search".equals(mode);
+        return false;
+    }
+
+    private void refreshControlStates() {
+        if (searchIcon == null) return;
+        View[] views = {searchIcon, catalogIcon, netflixIcon, sortIcon, refreshFab};
+        for (View v : views) {
+            if (v != null) {
+                boolean active = controlIsActive(v);
+                v.setBackground(roundRect(CARD, active ? ORANGE : BORDER, active ? 2 : 1, 11));
+            }
+        }
+        if (sectionTitle != null) sectionTitle.setText(modeTitle());
+    }
+
+    private String modeTitle() {
+        switch (mode) {
+            case "movies": return "Movies";
+            case "series": return "Series";
+            case "netflix": return "Netflix Malaysia";
+            case "upcoming": return "Upcoming";
+            case "search": return "Search Results";
+            default: return "Latest Movies & Series";
+        }
     }
 
     private TextView text(String value, float sp, int color, boolean bold) {
@@ -280,56 +418,6 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private Button button(String value, float sp) {
-        Button b = new Button(this);
-        b.setAllCaps(false);
-        b.setText(value);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        b.setTextColor(WHITE);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(12), 0, dp(12), 0);
-        styleFocusable(b, false);
-        return b;
-    }
-
-    private void styleFocusable(View v, boolean active) {
-        v.setBackground(roundRect(CARD, active ? ORANGE : BORDER, active ? 3 : 2, 14));
-        v.setOnFocusChangeListener((view, hasFocus) -> {
-            view.setScaleX(hasFocus ? 1.05f : 1f);
-            view.setScaleY(hasFocus ? 1.05f : 1f);
-            if (hasFocus) {
-                view.setBackground(roundRect(CARD, ORANGE, 4, 14));
-            } else {
-                highlightModeButton();
-                if (!(view instanceof Button) || view != activeModeButton()) {
-                    view.setBackground(roundRect(CARD, BORDER, 2, 14));
-                }
-            }
-        });
-    }
-
-    private boolean isActiveButton(View v) {
-        if (!(v instanceof Button)) return false;
-        return v == activeModeButton();
-    }
-
-    private Button activeModeButton() {
-        switch (mode) {
-            case "movies": return modeBtnMovies;
-            case "series": return modeBtnSeries;
-            case "netflix": return modeBtnNetflix;
-            case "upcoming": return modeBtnUpcoming;
-            default: return modeBtnLatest;
-        }
-    }
-
-    private void highlightModeButton() {
-        Button[] bs = {modeBtnLatest, modeBtnMovies, modeBtnSeries, modeBtnNetflix, modeBtnUpcoming};
-        for (Button b : bs) {
-            if (b != null) b.setBackground(roundRect(CARD, b == activeModeButton() ? ORANGE : BORDER, b == activeModeButton() ? 3 : 2, 14));
-        }
-    }
-
     private GradientDrawable roundRect(int fill, int stroke, int width, int radius) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(fill);
@@ -338,10 +426,28 @@ public class MainActivity extends Activity {
         return g;
     }
 
+    private void showFatalStartupError(Throwable t) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(40), dp(30), dp(40), dp(30));
+        root.setBackgroundColor(BG);
+        TextView title = text("Latest Movies & Series", 32, WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, new LinearLayout.LayoutParams(-1, -2));
+        TextView msg = text("App startup error\n\n" + t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()), 20, MUTED, false);
+        msg.setGravity(Gravity.CENTER);
+        msg.setPadding(0, dp(20), 0, 0);
+        root.addView(msg, new LinearLayout.LayoutParams(-1, -2));
+        setContentView(root);
+    }
+
     private void loadCatalog() {
         if (loading) return;
         loading = true;
-        status.setText("Loading latest titles…");
+        status.setText("Loading…");
+        status.setVisibility(View.VISIBLE);
+
         pool.execute(() -> {
             try {
                 String today = dateNow(0);
@@ -385,13 +491,17 @@ public class MainActivity extends Activity {
                 allItems.clear();
                 allItems.addAll(merged.values());
                 loading = false;
+
                 ui.post(() -> {
-                    status.setText("Ready • " + allItems.size() + " titles loaded");
+                    status.setVisibility(View.GONE);
                     render();
                 });
             } catch (Exception e) {
                 loading = false;
-                ui.post(() -> status.setText("Failed to load. Press Refresh. " + safeMessage(e)));
+                ui.post(() -> {
+                    status.setText("Failed to load: " + safeMessage(e));
+                    status.setVisibility(View.VISIBLE);
+                });
             }
         });
     }
@@ -399,11 +509,14 @@ public class MainActivity extends Activity {
     private List<Item> fetchTmdb(String path, Map<String,String> params, String media, boolean netflix, boolean upcoming) throws Exception {
         Uri.Builder b = Uri.parse(API + "/tmdb").buildUpon();
         b.appendQueryParameter("path", path);
-        for (Map.Entry<String,String> e : params.entrySet()) b.appendQueryParameter(e.getKey(), e.getValue());
+        for (Map.Entry<String,String> e : params.entrySet()) {
+            b.appendQueryParameter(e.getKey(), e.getValue());
+        }
         JSONObject root = getJson(b.build().toString());
         JSONArray a = root.optJSONArray("results");
         List<Item> out = new ArrayList<>();
         if (a == null) return out;
+
         for (int i=0;i<a.length();i++) {
             JSONObject r = a.optJSONObject(i);
             if (r == null) continue;
@@ -422,10 +535,11 @@ public class MainActivity extends Activity {
         x.title = firstNonEmpty(r.optString("title"), r.optString("name"), "Untitled");
         x.originalTitle = firstNonEmpty(r.optString("original_title"), r.optString("original_name"), x.title);
         x.date = firstNonEmpty(r.optString("release_date"), r.optString("first_air_date"), "");
-        x.originalLanguage = r.optString("original_language", "");
-        x.overview = r.optString("overview", "");
-        x.posterPath = r.optString("poster_path", "");
+        x.originalLanguage = cleanValue(r.optString("original_language", ""));
+        x.overview = cleanValue(r.optString("overview", ""));
+        x.posterPath = cleanValue(r.optString("poster_path", ""));
         x.tmdb = r.optDouble("vote_average", 0);
+
         JSONArray gs = r.optJSONArray("genre_ids");
         if (gs != null) {
             for (int i=0;i<gs.length();i++) {
@@ -438,24 +552,28 @@ public class MainActivity extends Activity {
 
     private void render() {
         ui.post(() -> {
+            refreshControlStates();
             cardRefs.clear();
             content.removeAllViews();
+
             List<Item> list = filteredItems();
             if (list.isEmpty()) {
-                TextView empty = text(mode.equals("search") ? "No search results." : "No titles available.", 26, MUTED, false);
+                TextView empty = text("No titles available.", 22, MUTED, false);
                 empty.setGravity(Gravity.CENTER);
-                empty.setPadding(0, dp(80), 0, dp(80));
+                empty.setPadding(0, dp(60), 0, dp(60));
                 content.addView(empty, new LinearLayout.LayoutParams(-1, -2));
                 return;
             }
 
             int count = Math.min(visibleCount, list.size());
+
             for (int i=0;i<count;i+=5) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.TOP);
+
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
-                rowLp.bottomMargin = dp(16);
+                rowLp.bottomMargin = dp(9);
                 content.addView(row, rowLp);
 
                 for (int j=0;j<5;j++) {
@@ -465,22 +583,23 @@ public class MainActivity extends Activity {
                     } else {
                         Space s = new Space(this);
                         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, dp(1), 1f);
-                        if (j > 0) sp.leftMargin = dp(6);
+                        if (j > 0) sp.leftMargin = dp(3);
+                        if (j < 4) sp.rightMargin = dp(3);
                         row.addView(s, sp);
                     }
                 }
             }
 
             if (count < list.size()) {
-                Button more = button("More +10", 22);
+                Button more = smallTextButton("More +10", 17);
                 more.setOnClickListener(v -> {
                     visibleCount += 10;
                     render();
                 });
-                LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(dp(220), dp(62));
+                LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(dp(170), dp(48));
                 mlp.gravity = Gravity.CENTER_HORIZONTAL;
-                mlp.topMargin = dp(8);
-                mlp.bottomMargin = dp(30);
+                mlp.topMargin = dp(4);
+                mlp.bottomMargin = dp(16);
                 content.addView(more, mlp);
             }
 
@@ -491,50 +610,43 @@ public class MainActivity extends Activity {
     private void addCard(LinearLayout row, Item item, int column) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(10), dp(10), dp(10), dp(10));
-        card.setBackground(roundRect(CARD, BORDER, 2, 18));
+        card.setPadding(dp(8), dp(8), dp(8), dp(8));
+        card.setBackground(roundRect(CARD, BORDER, 1, 13));
 
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -2, 1f);
-        if (column > 0) cp.leftMargin = dp(6);
-        if (column < 4) cp.rightMargin = dp(6);
+        if (column > 0) cp.leftMargin = dp(3);
+        if (column < 4) cp.rightMargin = dp(3);
         row.addView(card, cp);
 
         ImageView poster = new ImageView(this);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         poster.setBackgroundColor(Color.rgb(45,42,60));
-        card.addView(poster, new LinearLayout.LayoutParams(-1, dp(180)));
+        card.addView(poster, new LinearLayout.LayoutParams(-1, dp(178)));
 
-        TextView meta = text(metaLine(item), 13, YELLOW, true);
-        meta.setMaxLines(2);
-        meta.setPadding(0, dp(7), 0, 0);
+        TextView meta = text(metaLine(item), 12, YELLOW, true);
+        meta.setSingleLine(true);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            meta.setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1, TypedValue.COMPLEX_UNIT_SP);
+        }
+        meta.setPadding(0, dp(5), 0, 0);
         card.addView(meta);
 
-        TextView title = text(displayTitle(item), 19, WHITE, true);
-        title.setMaxLines(3);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setPadding(0, dp(5), 0, 0);
+        TextView title = text(displayTitle(item), 18, WHITE, true);
+        title.setPadding(0, dp(4), 0, 0);
         card.addView(title);
 
-        TextView genre = text(item.genreList.isEmpty() ? "-" : TextUtils.join(" • ", item.genreList), 14, MUTED, false);
-        genre.setMaxLines(2);
-        genre.setEllipsize(TextUtils.TruncateAt.END);
-        genre.setPadding(0, dp(5), 0, 0);
+        TextView genre = text(item.genreList.isEmpty() ? "-" : TextUtils.join(" • ", item.genreList), 13, MUTED, false);
+        genre.setPadding(0, dp(4), 0, 0);
         card.addView(genre);
 
-        if (item.netflix) {
-            TextView provider = text("Netflix Malaysia", 14, NETFLIX, true);
-            provider.setPadding(0, dp(4), 0, 0);
-            card.addView(provider);
-        }
-
-        TextView synopsis = text(TextUtils.isEmpty(item.overview) ? "No synopsis available." : item.overview, 14, MUTED, false);
+        TextView synopsis = text(TextUtils.isEmpty(item.overview) ? "No synopsis available." : item.overview, 13, MUTED, false);
         synopsis.setLineSpacing(0, 1.08f);
         synopsis.setMaxLines(3);
         synopsis.setEllipsize(TextUtils.TruncateAt.END);
         synopsis.setPadding(0, dp(6), 0, 0);
         card.addView(synopsis);
 
-        Button synMore = button("more", 12);
+        Button synMore = smallTextButton("more", 11);
         synMore.setTextColor(ORANGE);
         synMore.setBackgroundColor(Color.TRANSPARENT);
         synMore.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
@@ -544,25 +656,33 @@ public class MainActivity extends Activity {
             synopsis.setEllipsize(expanded ? TextUtils.TruncateAt.END : null);
             synMore.setText(expanded ? "more" : "less");
         });
-        card.addView(synMore, new LinearLayout.LayoutParams(-1, dp(34)));
+        card.addView(synMore, new LinearLayout.LayoutParams(-1, dp(30)));
+
+        if (item.netflix) {
+            TextView provider = text("Netflix Malaysia", 12, NETFLIX, true);
+            provider.setPadding(0, dp(1), 0, dp(2));
+            card.addView(provider);
+        }
 
         LinearLayout ratingsRow = new LinearLayout(this);
         ratingsRow.setOrientation(LinearLayout.HORIZONTAL);
         ratingsRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams rrlp = new LinearLayout.LayoutParams(-1, dp(54));
-        rrlp.topMargin = dp(3);
+        LinearLayout.LayoutParams rrlp = new LinearLayout.LayoutParams(-1, dp(36));
+        rrlp.topMargin = dp(2);
         card.addView(ratingsRow, rrlp);
 
-        TextView ratings = text(ratingsLine(item), 13, WHITE, true);
-        ratings.setMaxLines(3);
+        TextView ratings = text(ratingsLine(item), 12, WHITE, true);
+        ratings.setSingleLine(true);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            ratings.setAutoSizeTextTypeUniformWithConfiguration(8, 12, 1, TypedValue.COMPLEX_UNIT_SP);
+        }
         ratings.setGravity(Gravity.CENTER_VERTICAL);
         ratingsRow.addView(ratings, new LinearLayout.LayoutParams(0, -1, 1f));
 
-        Button lang = button(langLabel(item.currentLang), 11);
-        lang.setMinWidth(0);
-        lang.setPadding(dp(5), 0, dp(5), 0);
+        Button lang = smallTextButton(langLabel(item.currentLang), 10);
+        lang.setPadding(dp(4), 0, dp(4), 0);
         lang.setOnClickListener(v -> cycleLanguage(item));
-        ratingsRow.addView(lang, new LinearLayout.LayoutParams(dp(46), dp(34)));
+        ratingsRow.addView(lang, new LinearLayout.LayoutParams(dp(42), dp(30)));
 
         CardRefs refs = new CardRefs();
         refs.meta = meta;
@@ -577,23 +697,30 @@ public class MainActivity extends Activity {
     }
 
     private List<Item> filteredItems() {
-        List<Item> source = mode.equals("search") ? new ArrayList<>(searchItems) : new ArrayList<>(allItems);
+        List<Item> source = "search".equals(mode)
+                ? new ArrayList<>(searchItems)
+                : new ArrayList<>(allItems);
+
         String today = dateNow(0);
         String ago = dateNow(-12);
         List<Item> out = new ArrayList<>();
 
         for (Item x : source) {
-            if (mode.equals("search")) {
+            if ("search".equals(mode)) {
                 out.add(x);
                 continue;
             }
-            boolean latest = !TextUtils.isEmpty(x.date) && x.date.compareTo(ago) >= 0 && x.date.compareTo(today) <= 0;
+
+            boolean latest = !TextUtils.isEmpty(x.date)
+                    && x.date.compareTo(ago) >= 0
+                    && x.date.compareTo(today) <= 0;
+
             switch (mode) {
                 case "movies":
                     if (latest && "movie".equals(x.media) && !x.upcoming) out.add(x);
                     break;
                 case "series":
-                    if (latest && "tv".equals(x.media)) out.add(x);
+                    if (latest && "tv".equals(x.media) && !x.upcoming) out.add(x);
                     break;
                 case "netflix":
                     if (latest && x.netflix && !x.upcoming) out.add(x);
@@ -608,11 +735,12 @@ public class MainActivity extends Activity {
 
         if (sortRating) {
             out.sort((a,b) -> Double.compare(ratingScore(b), ratingScore(a)));
-        } else if (mode.equals("upcoming")) {
+        } else if ("upcoming".equals(mode)) {
             out.sort(Comparator.comparing(a -> a.date == null ? "9999" : a.date));
         } else {
             out.sort((a,b) -> String.valueOf(b.date).compareTo(String.valueOf(a.date)));
         }
+
         return out;
     }
 
@@ -628,19 +756,18 @@ public class MainActivity extends Activity {
                 continue;
             }
             if (!enrichInflight.add(item.key())) continue;
+
             pool.execute(() -> {
                 try {
                     Uri ratingsUri = Uri.parse(API + "/ratings").buildUpon()
                             .appendQueryParameter("media", item.media)
                             .appendQueryParameter("id", String.valueOf(item.id))
                             .build();
+
                     JSONObject r = getJson(ratingsUri.toString());
-                    String imdb = r.optString("imdb", "");
-                    String rt = r.optString("rt", "");
-                    String mc = r.optString("metacritic", "");
-                    item.imdb = parseNumber(imdb);
-                    item.rtRaw = rt;
-                    item.mcRaw = mc;
+                    item.imdb = parseNumber(cleanValue(r.optString("imdb", "")));
+                    item.rtRaw = cleanValue(r.optString("rt", ""));
+                    item.mcRaw = cleanValue(r.optString("metacritic", ""));
 
                     if (TextUtils.isEmpty(item.rtRaw)) {
                         try {
@@ -649,7 +776,7 @@ public class MainActivity extends Activity {
                                     .appendQueryParameter("id", String.valueOf(item.id))
                                     .build();
                             JSONObject rr = getJson(rtUri.toString());
-                            item.rtRaw = rr.optString("rt", "");
+                            item.rtRaw = cleanValue(rr.optString("rt", ""));
                         } catch (Exception ignored) {}
                     }
 
@@ -677,6 +804,7 @@ public class MainActivity extends Activity {
     }
 
     private final Runnable resortRunnable = this::render;
+
     private void scheduleResort() {
         ui.removeCallbacks(resortRunnable);
         ui.postDelayed(resortRunnable, 700);
@@ -685,11 +813,14 @@ public class MainActivity extends Activity {
     private void updateCard(Item item) {
         CardRefs r = cardRefs.get(item.key());
         if (r == null) return;
+
         r.meta.setText(metaLine(item));
         r.ratings.setText(ratingsLine(item));
         r.lang.setText(langLabel(item.currentLang));
+
         String overview = overviewForLanguage(item);
         if (!TextUtils.isEmpty(overview)) r.synopsis.setText(overview);
+
         if ("ar".equals(item.currentLang)) {
             r.synopsis.setTextDirection(View.TEXT_DIRECTION_RTL);
             r.synopsis.setGravity(Gravity.RIGHT);
@@ -700,21 +831,27 @@ public class MainActivity extends Activity {
     }
 
     private void cycleLanguage(Item item) {
-        String next = "en".equals(item.currentLang) ? "ms" : "ms".equals(item.currentLang) ? "ar" : "en";
+        String next = "en".equals(item.currentLang)
+                ? "ms"
+                : "ms".equals(item.currentLang) ? "ar" : "en";
+
         if ("en".equals(next)) {
             item.currentLang = "en";
             updateCard(item);
             return;
         }
+
         String cached = "ms".equals(next) ? item.ms : item.ar;
         item.currentLang = next;
         updateCard(item);
+
         if (!TextUtils.isEmpty(cached) || TextUtils.isEmpty(item.overview)) return;
 
         pool.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("target", next);
+
                 JSONArray arr = new JSONArray();
                 JSONObject one = new JSONObject();
                 one.put("key", item.key());
@@ -723,11 +860,14 @@ public class MainActivity extends Activity {
                 one.put("text", item.overview);
                 arr.put(one);
                 payload.put("items", arr);
+
                 JSONObject response = postJson(API + "/translate-batch", payload);
                 JSONObject trans = response.optJSONObject("translations");
-                String translated = trans == null ? "" : trans.optString(item.key(), "");
+                String translated = trans == null ? "" : cleanValue(trans.optString(item.key(), ""));
+
                 if (!TextUtils.isEmpty(translated)) {
-                    if ("ms".equals(next)) item.ms = translated; else item.ar = translated;
+                    if ("ms".equals(next)) item.ms = translated;
+                    else item.ar = translated;
                     ui.post(() -> updateCard(item));
                 } else {
                     ui.post(() -> {
@@ -749,59 +889,79 @@ public class MainActivity extends Activity {
     private void runSearch(String raw) {
         String q = raw == null ? "" : raw.trim();
         if (q.isEmpty()) return;
-        status.setText("Searching “" + q + "”…");
+
+        status.setText("Searching…");
+        status.setVisibility(View.VISIBLE);
         mode = "search";
         visibleCount = 10;
-        highlightModeButton();
+        refreshControlStates();
+
         pool.execute(() -> {
             try {
-                Uri u = Uri.parse(API + "/search").buildUpon().appendQueryParameter("q", q).build();
+                Uri u = Uri.parse(API + "/search").buildUpon()
+                        .appendQueryParameter("q", q)
+                        .build();
+
                 JSONObject root = getJson(u.toString());
                 JSONArray a = root.optJSONArray("results");
                 List<Item> result = new ArrayList<>();
+
                 if (a != null) {
                     for (int i=0;i<a.length();i++) {
                         JSONObject r = a.optJSONObject(i);
                         if (r == null) continue;
-                        String media = r.optString("media_type", "");
-                        if (!media.equals("movie") && !media.equals("tv")) continue;
+
+                        String media = cleanValue(r.optString("media_type", ""));
+                        if (!"movie".equals(media) && !"tv".equals(media)) continue;
+
                         result.add(itemFromJson(r, media));
                     }
                 }
+
                 searchItems.clear();
                 searchItems.addAll(result);
+
                 ui.post(() -> {
-                    status.setText(result.size() + " search results");
+                    status.setVisibility(View.GONE);
                     render();
                 });
             } catch (Exception e) {
-                ui.post(() -> status.setText("Search failed. " + safeMessage(e)));
+                ui.post(() -> {
+                    status.setText("Search failed: " + safeMessage(e));
+                    status.setVisibility(View.VISIBLE);
+                });
             }
         });
     }
 
     private void loadPoster(Item item, ImageView view) {
         if (TextUtils.isEmpty(item.posterPath)) return;
+
         String url = "https://image.tmdb.org/t/p/w342" + item.posterPath;
         Bitmap cached = imageCache.get(url);
+
         if (cached != null) {
             view.setImageBitmap(cached);
             return;
         }
+
         pool.execute(() -> {
             HttpURLConnection c = null;
             try {
                 c = (HttpURLConnection) new URL(url).openConnection();
                 c.setConnectTimeout(6000);
                 c.setReadTimeout(7000);
-                c.setRequestProperty("User-Agent", "CineSpotList-TV/3.0");
+                c.setRequestProperty("User-Agent", "CineSpotList-TV/4.1");
+
                 try (InputStream in = c.getInputStream()) {
                     Bitmap b = BitmapFactory.decodeStream(in);
                     if (b != null) {
                         imageCache.put(url, b);
                         ui.post(() -> {
                             CardRefs current = cardRefs.get(item.key());
-                            if (current != null && current.poster == view) view.setImageBitmap(b);
+                            if (current != null && current.poster == view) {
+                                view.setImageBitmap(b);
+                            }
                         });
                     }
                 }
@@ -813,7 +973,8 @@ public class MainActivity extends Activity {
     }
 
     private String displayTitle(Item x) {
-        if (!TextUtils.isEmpty(x.originalTitle) && !x.originalTitle.equalsIgnoreCase(x.title)) {
+        if (!TextUtils.isEmpty(x.originalTitle)
+                && !x.originalTitle.equalsIgnoreCase(x.title)) {
             return x.originalTitle + " " + x.title;
         }
         return x.title;
@@ -847,20 +1008,33 @@ public class MainActivity extends Activity {
         return "eng";
     }
 
+    private String cleanValue(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s) || "n/a".equalsIgnoreCase(s) || "undefined".equalsIgnoreCase(s)) {
+            return "";
+        }
+        return s;
+    }
+
     private String formatRt(String raw) {
-        if (TextUtils.isEmpty(raw) || "N/A".equalsIgnoreCase(raw)) return "-";
+        raw = cleanValue(raw);
+        if (TextUtils.isEmpty(raw)) return "-";
         try {
             String s = raw.replace("%", "").trim();
             double n = Double.parseDouble(s);
             double f = n / 20.0;
-            return (Math.abs(f - Math.rint(f)) < 0.001 ? String.format(Locale.US, "%.0f", f) : String.format(Locale.US, "%.1f", f)) + "/5";
+            return (Math.abs(f - Math.rint(f)) < 0.001
+                    ? String.format(Locale.US, "%.0f", f)
+                    : String.format(Locale.US, "%.1f", f)) + "/5";
         } catch (Exception e) {
             return raw;
         }
     }
 
     private String formatMc(String raw) {
-        if (TextUtils.isEmpty(raw) || "N/A".equalsIgnoreCase(raw)) return "-";
+        raw = cleanValue(raw);
+        if (TextUtils.isEmpty(raw)) return "-";
         try {
             return String.format(Locale.US, "%.1f", Double.parseDouble(raw) / 10.0);
         } catch (Exception e) {
@@ -869,8 +1043,9 @@ public class MainActivity extends Activity {
     }
 
     private Double parseNumber(String s) {
+        s = cleanValue(s);
+        if (TextUtils.isEmpty(s)) return null;
         try {
-            if (TextUtils.isEmpty(s) || "N/A".equalsIgnoreCase(s)) return null;
             return Double.parseDouble(s.replace("%","").trim());
         } catch (Exception e) {
             return null;
@@ -932,7 +1107,8 @@ public class MainActivity extends Activity {
         c.setReadTimeout(12000);
         c.setRequestMethod("GET");
         c.setRequestProperty("Accept", "application/json");
-        c.setRequestProperty("User-Agent", "CineSpotList-TV/3.0");
+        c.setRequestProperty("User-Agent", "CineSpotList-TV/4.1");
+
         try {
             int code = c.getResponseCode();
             String body = readAll(code >= 400 ? c.getErrorStream() : c.getInputStream());
@@ -951,9 +1127,11 @@ public class MainActivity extends Activity {
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "application/json");
         c.setRequestProperty("Accept", "application/json");
-        c.setRequestProperty("User-Agent", "CineSpotList-TV/3.0");
+        c.setRequestProperty("User-Agent", "CineSpotList-TV/4.1");
+
         byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
         c.getOutputStream().write(bytes);
+
         try {
             int code = c.getResponseCode();
             String body = readAll(code >= 400 ? c.getErrorStream() : c.getInputStream());
@@ -967,21 +1145,29 @@ public class MainActivity extends Activity {
     private String readAll(InputStream in) throws Exception {
         if (in == null) return "";
         StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(in, StandardCharsets.UTF_8))) {
             String line;
             while ((line = br.readLine()) != null) sb.append(line);
         }
+
         return sb.toString();
     }
 
     private Map<String,String> mapOf(String... values) {
         Map<String,String> m = new LinkedHashMap<>();
-        for (int i=0;i+1<values.length;i+=2) m.put(values[i], values[i+1]);
+        for (int i=0;i+1<values.length;i+=2) {
+            m.put(values[i], values[i+1]);
+        }
         return m;
     }
 
     private String firstNonEmpty(String... values) {
-        for (String v : values) if (!TextUtils.isEmpty(v) && !"null".equalsIgnoreCase(v)) return v;
+        for (String v : values) {
+            String s = cleanValue(v);
+            if (!TextUtils.isEmpty(s)) return s;
+        }
         return "";
     }
 
