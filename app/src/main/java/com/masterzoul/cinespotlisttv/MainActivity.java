@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setLoadWithOverviewMode(true);
+        settings.setLoadWithOverviewMode(false);
         settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
@@ -89,40 +89,40 @@ public class MainActivity extends Activity {
             "if(document.getElementById('cinespot-tv-style')) return;" +
             "var s=document.createElement('style');s.id='cinespot-tv-style';" +
             "s.textContent=`" +
-            ":root{--max:820px!important;--page-pad:28px!important;}" +
-            "html,body{overflow-x:hidden!important;}" +
-            ".app{max-width:900px!important;margin:0 auto!important;box-shadow:0 0 80px rgba(0,0,0,.35)!important;}" +
-            ".head-inner,main{max-width:820px!important;}" +
-            "h1{font-size:34px!important;}" +
-            ".meta{font-size:18px!important;}" +
-            ".icons{gap:22px!important;margin-top:18px!important;}" +
-            ".icon-btn{width:58px!important;height:58px!important;}" +
-            ".icon-btn svg{width:29px!important;height:29px!important;}" +
-            ".netflix-n{font-size:34px!important;}" +
-            ".menu button,.search-input,.search-go,.search-clear{font-size:20px!important;padding:12px 16px!important;}" +
-            "main{padding-top:30px!important;}" +
-            ".category-head h2{font-size:30px!important;}" +
-            ".category-head h2 span{font-size:22px!important;}" +
-            ".category-head p,.notice,.error,.empty{font-size:21px!important;}" +
-            ".cards{gap:20px!important;}" +
-            ".card{border-radius:22px!important;}" +
-            ".card-top{gap:20px!important;padding:18px 18px 14px!important;}" +
-            ".poster{width:180px!important;height:270px!important;flex:0 0 180px!important;border-radius:16px!important;}" +
-            ".topline{font-size:20px!important;}" +
-            ".title{font-size:30px!important;line-height:1.22!important;}" +
-            ".genres{font-size:22px!important;margin-top:9px!important;}" +
-            ".provider{font-size:20px!important;}" +
-            ".synopsis-text{font-size:22px!important;line-height:1.5!important;}" +
-            ".more-btn{font-size:20px!important;margin-top:6px!important;}" +
-            ".ratings{padding:4px 16px 16px!important;}" +
-            ".ratings-line{font-size:20px!important;letter-spacing:-.01em!important;}" +
-            ".syn-lang-btn{height:30px!important;min-width:46px!important;font-size:16px!important;line-height:28px!important;border-radius:8px!important;}" +
-            ".load-more-btn{font-size:21px!important;padding:13px 26px!important;min-width:160px!important;}" +
-            ".refresh-fab{width:62px!important;height:62px!important;right:34px!important;bottom:30px!important;}" +
-            ".refresh-fab svg{width:28px!important;height:28px!important;}" +
-            "footer{font-size:19px!important;}" +
-            "button:focus,input:focus,[tabindex]:focus{outline:4px solid #e99a51!important;outline-offset:4px!important;box-shadow:0 0 0 4px rgba(233,154,81,.22)!important;}" +
-            "@media(min-width:1200px){.app{max-width:900px!important}.head-inner,main{max-width:820px!important}}" +
+            ":root{--max:100%!important;--page-pad:44px!important;}" +
+            "html,body{width:100%!important;max-width:none!important;overflow-x:hidden!important;background:#171625!important;}body{font-size:22px!important;}" +
+            ".app{width:100%!important;max-width:none!important;margin:0!important;box-shadow:none!important;background:#171625!important;}" +
+            ".head-inner,main{width:100%!important;max-width:none!important;padding-left:54px!important;padding-right:54px!important;box-sizing:border-box!important;}" +
+            "h1{font-size:42px!important;line-height:1.1!important;}" +
+            ".meta{font-size:21px!important;}" +
+            ".icons{gap:24px!important;margin-top:20px!important;}" +
+            ".icon-btn{width:66px!important;height:66px!important;}" +
+            ".icon-btn svg{width:32px!important;height:32px!important;}" +
+            ".netflix-n{font-size:39px!important;}" +
+            ".menu button,.search-input,.search-go,.search-clear{font-size:22px!important;padding:14px 18px!important;}" +
+            "main{padding-top:36px!important;padding-bottom:52px!important;}" +
+            ".category-head h2{font-size:36px!important;}" +
+            ".category-head h2 span{font-size:25px!important;}" +
+            ".category-head p,.notice,.error,.empty{font-size:24px!important;line-height:1.4!important;}" +
+            ".cards{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:26px!important;align-items:start!important;}" +
+            ".card{min-width:0!important;width:100%!important;border-radius:24px!important;overflow:visible!important;}" +
+            ".card-top{gap:22px!important;padding:22px 22px 14px!important;align-items:flex-start!important;}" +
+            ".poster{width:210px!important;height:315px!important;flex:0 0 210px!important;border-radius:17px!important;object-fit:cover!important;}" +
+            ".topline{font-size:22px!important;line-height:1.28!important;white-space:normal!important;}" +
+            ".title{font-size:34px!important;line-height:1.18!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;display:block!important;}" +
+            ".genres{font-size:24px!important;margin-top:10px!important;line-height:1.35!important;}" +
+            ".provider{font-size:22px!important;}" +
+            ".synopsis-text{font-size:24px!important;line-height:1.46!important;}" +
+            ".more-btn{font-size:21px!important;margin-top:8px!important;}" +
+            ".ratings{padding:4px 20px 18px!important;overflow:visible!important;}" +
+            ".ratings-line{font-size:22px!important;line-height:1.35!important;letter-spacing:-.01em!important;flex-wrap:wrap!important;row-gap:6px!important;}" +
+            ".syn-lang-btn{height:34px!important;min-width:52px!important;font-size:17px!important;line-height:32px!important;border-radius:9px!important;}" +
+            ".load-more-btn{font-size:24px!important;padding:15px 34px!important;min-width:190px!important;border-radius:14px!important;}" +
+            ".refresh-fab{width:70px!important;height:70px!important;right:42px!important;bottom:34px!important;}" +
+            ".refresh-fab svg{width:31px!important;height:31px!important;}" +
+            "footer{font-size:20px!important;line-height:1.5!important;padding-left:54px!important;padding-right:54px!important;}" +
+            "button:focus,input:focus,a:focus,[tabindex]:focus{outline:5px solid #f2a65a!important;outline-offset:5px!important;box-shadow:0 0 0 7px rgba(242,166,90,.22)!important;transform:scale(1.035)!important;transition:transform .12s ease,box-shadow .12s ease!important;}" +
+            "@media(max-width:1250px){.cards{grid-template-columns:1fr!important;}}" +
             "`;document.head.appendChild(s);" +
             "function prep(){document.querySelectorAll('button,input,a,[role=button]').forEach(function(e){if(!e.hasAttribute('tabindex'))e.setAttribute('tabindex','0');});}" +
             "prep();new MutationObserver(prep).observe(document.body,{childList:true,subtree:true});" +
@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
         String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>" +
                 "<style>body{margin:0;background:#171625;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center}" +
                 ".box{max-width:720px;padding:50px}h1{font-size:42px}p{font-size:25px;color:#aaa6bb}button{font-size:25px;padding:16px 30px;border-radius:14px;border:2px solid #e99a51;background:#211f31;color:#e99a51}</style></head>" +
-                "<body><div class='box'><h1>CineSpotList TV</h1><p>Internet connection is unavailable.</p><button onclick=\"location.href='" + APP_URL + "'\">Retry</button></div></body></html>";
+                "<body><div class='box'><h1>CineSpotList TV Landscape</h1><p>Internet connection is unavailable.</p><button onclick=\"location.href='" + APP_URL + "'\">Retry</button></div></body></html>";
         webView.loadDataWithBaseURL(APP_URL, html, "text/html", "UTF-8", null);
     }
 
