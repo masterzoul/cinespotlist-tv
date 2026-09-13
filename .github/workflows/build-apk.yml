@@ -1,4 +1,4 @@
-name: Build Android TV APK
+name: Build Android TV Landscape APK
 
 on:
   workflow_dispatch:
@@ -27,11 +27,11 @@ jobs:
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk CineSpotList-TV.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk CineSpotList-TV-Landscape.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CineSpotList-TV-APK
-          path: CineSpotList-TV.apk
+          name: CineSpotList-TV-Landscape-APK
+          path: CineSpotList-TV-Landscape.apk
           retention-days: 30
