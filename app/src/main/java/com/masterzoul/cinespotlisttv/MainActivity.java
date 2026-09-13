@@ -91,11 +91,35 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        enterImmersiveMode();
-        initGenres();
-        buildUi();
-        loadCatalog();
+        try {
+            requestWindowFeature(Window.FEATURE_NO_TITLE);
+            enterImmersiveMode();
+            initGenres();
+            buildUi();
+            status.setText("CineSpotList TV v4.0.0 • Starting…");
+            ui.postDelayed(this::loadCatalog, 350);
+        } catch (Throwable t) {
+            showFatalStartupError(t);
+        }
+    }
+
+    private void showFatalStartupError(Throwable t) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(50), dp(40), dp(50), dp(40));
+        root.setBackgroundColor(BG);
+
+        TextView title = text("CineSpotList TV", 34, WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView msg = text("App startup error\n\n" + t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()), 22, MUTED, false);
+        msg.setGravity(Gravity.CENTER);
+        msg.setPadding(0, dp(24), 0, 0);
+        root.addView(msg, new LinearLayout.LayoutParams(-1, -2));
+
+        setContentView(root);
     }
 
     private int dp(int v) {
@@ -103,22 +127,14 @@ public class MainActivity extends Activity {
     }
 
     private void enterImmersiveMode() {
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = getWindow().getInsetsController();
-            if (c != null) {
-                c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            }
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            );
-        }
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
     }
 
     private void buildUi() {
@@ -139,7 +155,7 @@ public class MainActivity extends Activity {
 
         TextView title = text("CineSpotList TV", 36, WHITE, true);
         titles.addView(title);
-        TextView sub = text("Latest Movies & Series • Native TV v3.0.0", 18, MUTED, false);
+        TextView sub = text("Latest Movies & Series • Sony TV v4.0.0 • 5 cards", 18, MUTED, false);
         sub.setPadding(0, dp(5), 0, 0);
         titles.addView(sub);
 
@@ -281,7 +297,14 @@ public class MainActivity extends Activity {
         v.setOnFocusChangeListener((view, hasFocus) -> {
             view.setScaleX(hasFocus ? 1.05f : 1f);
             view.setScaleY(hasFocus ? 1.05f : 1f);
-            view.setBackground(roundRect(CARD, hasFocus || isActiveButton(view) ? ORANGE : BORDER, hasFocus ? 4 : 2, 14));
+            if (hasFocus) {
+                view.setBackground(roundRect(CARD, ORANGE, 4, 14));
+            } else {
+                highlightModeButton();
+                if (!(view instanceof Button) || view != activeModeButton()) {
+                    view.setBackground(roundRect(CARD, BORDER, 2, 14));
+                }
+            }
         });
     }
 
@@ -427,22 +450,24 @@ public class MainActivity extends Activity {
             }
 
             int count = Math.min(visibleCount, list.size());
-            for (int i=0;i<count;i+=2) {
+            for (int i=0;i<count;i+=5) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.TOP);
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
-                rowLp.bottomMargin = dp(22);
+                rowLp.bottomMargin = dp(16);
                 content.addView(row, rowLp);
 
-                Item left = list.get(i);
-                addCard(row, left, true);
-                if (i+1<count) addCard(row, list.get(i+1), false);
-                else {
-                    Space s = new Space(this);
-                    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, dp(1), 1f);
-                    sp.leftMargin = dp(11);
-                    row.addView(s, sp);
+                for (int j=0;j<5;j++) {
+                    int index = i + j;
+                    if (index < count) {
+                        addCard(row, list.get(index), j);
+                    } else {
+                        Space s = new Space(this);
+                        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, dp(1), 1f);
+                        if (j > 0) sp.leftMargin = dp(6);
+                        row.addView(s, sp);
+                    }
                 }
             }
 
@@ -463,56 +488,53 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void addCard(LinearLayout row, Item item, boolean left) {
+    private void addCard(LinearLayout row, Item item, int column) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(18), dp(18), dp(18), dp(16));
-        card.setBackground(roundRect(CARD, BORDER, 2, 22));
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -2, 1f);
-        if (left) cp.rightMargin = dp(11); else cp.leftMargin = dp(11);
-        row.addView(card, cp);
+        card.setPadding(dp(10), dp(10), dp(10), dp(10));
+        card.setBackground(roundRect(CARD, BORDER, 2, 18));
 
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.TOP);
-        card.addView(top, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -2, 1f);
+        if (column > 0) cp.leftMargin = dp(6);
+        if (column < 4) cp.rightMargin = dp(6);
+        row.addView(card, cp);
 
         ImageView poster = new ImageView(this);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         poster.setBackgroundColor(Color.rgb(45,42,60));
-        top.addView(poster, new LinearLayout.LayoutParams(dp(170), dp(255)));
+        card.addView(poster, new LinearLayout.LayoutParams(-1, dp(180)));
 
-        LinearLayout info = new LinearLayout(this);
-        info.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(0, -2, 1f);
-        ilp.leftMargin = dp(18);
-        top.addView(info, ilp);
+        TextView meta = text(metaLine(item), 13, YELLOW, true);
+        meta.setMaxLines(2);
+        meta.setPadding(0, dp(7), 0, 0);
+        card.addView(meta);
 
-        TextView meta = text(metaLine(item), 18, YELLOW, true);
-        info.addView(meta);
+        TextView title = text(displayTitle(item), 19, WHITE, true);
+        title.setMaxLines(3);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        title.setPadding(0, dp(5), 0, 0);
+        card.addView(title);
 
-        TextView title = text(displayTitle(item), 27, WHITE, true);
-        title.setPadding(0, dp(6), 0, 0);
-        info.addView(title);
-
-        TextView genre = text(item.genreList.isEmpty() ? "-" : TextUtils.join(" • ", item.genreList), 20, MUTED, false);
-        genre.setPadding(0, dp(8), 0, 0);
-        info.addView(genre);
+        TextView genre = text(item.genreList.isEmpty() ? "-" : TextUtils.join(" • ", item.genreList), 14, MUTED, false);
+        genre.setMaxLines(2);
+        genre.setEllipsize(TextUtils.TruncateAt.END);
+        genre.setPadding(0, dp(5), 0, 0);
+        card.addView(genre);
 
         if (item.netflix) {
-            TextView provider = text("Netflix Malaysia", 19, NETFLIX, true);
-            provider.setPadding(0, dp(7), 0, 0);
-            info.addView(provider);
+            TextView provider = text("Netflix Malaysia", 14, NETFLIX, true);
+            provider.setPadding(0, dp(4), 0, 0);
+            card.addView(provider);
         }
 
-        TextView synopsis = text(TextUtils.isEmpty(item.overview) ? "No synopsis available." : item.overview, 20, MUTED, false);
-        synopsis.setLineSpacing(0, 1.15f);
+        TextView synopsis = text(TextUtils.isEmpty(item.overview) ? "No synopsis available." : item.overview, 14, MUTED, false);
+        synopsis.setLineSpacing(0, 1.08f);
         synopsis.setMaxLines(3);
         synopsis.setEllipsize(TextUtils.TruncateAt.END);
-        synopsis.setPadding(0, dp(12), 0, 0);
-        info.addView(synopsis);
+        synopsis.setPadding(0, dp(6), 0, 0);
+        card.addView(synopsis);
 
-        Button synMore = button("more", 16);
+        Button synMore = button("more", 12);
         synMore.setTextColor(ORANGE);
         synMore.setBackgroundColor(Color.TRANSPARENT);
         synMore.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
@@ -522,25 +544,25 @@ public class MainActivity extends Activity {
             synopsis.setEllipsize(expanded ? TextUtils.TruncateAt.END : null);
             synMore.setText(expanded ? "more" : "less");
         });
-        LinearLayout.LayoutParams smlp = new LinearLayout.LayoutParams(-1, dp(42));
-        info.addView(synMore, smlp);
+        card.addView(synMore, new LinearLayout.LayoutParams(-1, dp(34)));
 
         LinearLayout ratingsRow = new LinearLayout(this);
         ratingsRow.setOrientation(LinearLayout.HORIZONTAL);
         ratingsRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams rrlp = new LinearLayout.LayoutParams(-1, dp(48));
-        rrlp.topMargin = dp(8);
+        LinearLayout.LayoutParams rrlp = new LinearLayout.LayoutParams(-1, dp(54));
+        rrlp.topMargin = dp(3);
         card.addView(ratingsRow, rrlp);
 
-        TextView ratings = text(ratingsLine(item), 18, WHITE, true);
+        TextView ratings = text(ratingsLine(item), 13, WHITE, true);
+        ratings.setMaxLines(3);
         ratings.setGravity(Gravity.CENTER_VERTICAL);
         ratingsRow.addView(ratings, new LinearLayout.LayoutParams(0, -1, 1f));
 
-        Button lang = button(langLabel(item.currentLang), 15);
+        Button lang = button(langLabel(item.currentLang), 11);
         lang.setMinWidth(0);
-        lang.setPadding(dp(10), 0, dp(10), 0);
+        lang.setPadding(dp(5), 0, dp(5), 0);
         lang.setOnClickListener(v -> cycleLanguage(item));
-        ratingsRow.addView(lang, new LinearLayout.LayoutParams(dp(62), dp(38)));
+        ratingsRow.addView(lang, new LinearLayout.LayoutParams(dp(46), dp(34)));
 
         CardRefs refs = new CardRefs();
         refs.meta = meta;
